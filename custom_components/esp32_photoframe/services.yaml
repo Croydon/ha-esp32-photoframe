@@ -1,0 +1,18 @@
+rotate:
+  name: Rotate Image
+  description: Manually trigger image rotation (same as pressing the KEY button on the device)
+
+display_image:
+  name: Display Image
+  description: Display an image from a camera or image entity on the PhotoFrame
+  fields:
+    entity_id:
+      name: Entity
+      description: Camera or image entity to display
+      required: true
+      example: "camera.front_door"
+      selector:
+        entity:
+          domain:
+            - camera
+            - image

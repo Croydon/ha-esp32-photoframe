@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up ESP32 PhotoFrame",
+        "description": "Enter the connection details for your PhotoFrame device.\n\n💡 Tip: If the device appears offline and is battery-powered, press the BOOT button to wake it up.",
+        "data": {
+          "host": "PhotoFrame IP or hostname (e.g., 192.168.1.100 or photoframe.local)",
+          "ha_url": "Home Assistant URL (e.g., http://homeassistant.local:8123)"
+        },
+        "data_description": {
+          "host": "The IP address or hostname of your PhotoFrame device",
+          "ha_url": "The URL where Home Assistant can be accessed (used by PhotoFrame to fetch images)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to PhotoFrame. Please check the IP address/hostname and ensure the device is powered on.\n\n💡 If battery-powered: Press the BOOT button to wake up the device.",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This PhotoFrame device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure ESP32 PhotoFrame",
+        "description": "Configure Home Assistant URL and image serving options.\n\n💡 Enable 'Use HA Images' to serve images from a camera/image entity when the device uses URL rotation mode.",
+        "data": {
+          "ha_url": "Home Assistant URL",
+          "use_ha_images": "Use HA Images for URL rotation",
+          "media_entity_id": "Media Entity (Camera/Image)"
+        },
+        "data_description": {
+          "ha_url": "The URL where Home Assistant can be accessed",
+          "use_ha_images": "When enabled, configures the PhotoFrame to fetch images from Home Assistant instead of an external URL",
+          "media_entity_id": "Select a camera or image entity to serve to the photoframe when 'Use HA Images' is enabled"
+        }
+      }
+    }
+  }
+}

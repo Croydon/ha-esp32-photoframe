@@ -1,0 +1,5 @@
+{
+  "name": "ESP32 PhotoFrame",
+  "render_readme": true,
+  "domains": ["esp32_photoframe"]
+}

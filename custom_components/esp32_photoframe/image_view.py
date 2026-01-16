@@ -147,11 +147,17 @@ class PhotoFrameBatteryView(HomeAssistantView):
             data = await request.json()
             battery_level = data.get("battery_level")
             battery_voltage = data.get("battery_voltage")
+            charging = data.get("charging")
+            usb_connected = data.get("usb_connected")
+            battery_connected = data.get("battery_connected")
 
             _LOGGER.info(
-                "Received battery data: level=%s%%, voltage=%smV",
+                "Received battery push: level=%s%%, voltage=%smV, charging=%s, usb=%s, battery=%s",
                 battery_level,
                 battery_voltage,
+                charging,
+                usb_connected,
+                battery_connected,
             )
 
             # Update coordinator data for all photoframe integrations
@@ -162,6 +168,9 @@ class PhotoFrameBatteryView(HomeAssistantView):
                     coordinator.data["battery"] = {
                         "battery_level": battery_level,
                         "battery_voltage": battery_voltage,
+                        "charging": charging,
+                        "usb_connected": usb_connected,
+                        "battery_connected": battery_connected,
                     }
                     # Notify listeners of the update
                     coordinator.async_set_updated_data(coordinator.data)

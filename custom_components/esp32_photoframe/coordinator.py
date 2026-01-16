@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import Any
 
 import aiohttp
@@ -13,13 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import (
-    API_BATTERY,
-    API_CONFIG,
-    API_DISPLAY_IMAGE,
-    DEFAULT_SCAN_INTERVAL,
-    DOMAIN,
-)
+from .const import API_BATTERY, API_CONFIG, API_DISPLAY_IMAGE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,25 +41,25 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
-            # Allow 2 consecutive failures before marking unavailable
-            # This prevents entities from going unavailable during image processing
-            always_update=False,
+            # No automatic polling - rely on push updates from device
+            update_interval=None,
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""
+        # This is only called during initial setup or manual refresh
+        # Normal operation relies on push updates from the device
         try:
             # Fetch config data
             config_data = await self._fetch_config()
 
-            # Always try to fetch battery data
+            # Try to fetch battery data
             battery_data = await self._fetch_battery()
 
             # If we got battery data, update our cache
             if battery_data:
                 self._last_battery_data = battery_data
-            # Otherwise, use the last known battery data (device might be asleep)
+            # Otherwise, use the last known battery data
             else:
                 battery_data = self._last_battery_data
 
@@ -75,6 +68,13 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 "battery": battery_data,
             }
         except aiohttp.ClientError as err:
+            # If we have cached data, use it instead of failing
+            if self._last_battery_data:
+                _LOGGER.warning("Failed to fetch data, using cached values: %s", err)
+                return {
+                    "config": {},
+                    "battery": self._last_battery_data,
+                }
             raise UpdateFailed(f"Error communicating with API: {err}")
 
     async def _fetch_config(self) -> dict[str, Any]:

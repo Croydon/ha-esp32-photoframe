@@ -43,6 +43,11 @@ class PhotoFrameRotationModeSelect(CoordinatorEntity, SelectEntity):
         self._attr_device_info = coordinator.device_info
 
     @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.available
+
+    @property
     def current_option(self) -> str | None:
         """Return the current rotation mode."""
         config = self.coordinator.data.get("config", {})
@@ -72,6 +77,11 @@ class PhotoFrameMediaEntitySelect(CoordinatorEntity, SelectEntity):
         self._attr_device_info = coordinator.device_info
         self._hass = hass
         self._entry = entry
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.available
 
     @property
     def options(self) -> list[str]:

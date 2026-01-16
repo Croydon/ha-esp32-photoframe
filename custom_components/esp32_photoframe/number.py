@@ -47,6 +47,11 @@ class PhotoFrameRotationIntervalNumber(CoordinatorEntity, NumberEntity):
         self._attr_device_info = coordinator.device_info
 
     @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.available
+
+    @property
     def native_value(self) -> float | None:
         """Return the current rotation interval."""
         config = self.coordinator.data.get("config", {})

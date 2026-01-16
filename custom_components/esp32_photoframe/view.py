@@ -172,6 +172,10 @@ class PhotoFrameBatteryView(HomeAssistantView):
                         "usb_connected": usb_connected,
                         "battery_connected": battery_connected,
                     }
+                    # Update last update time for availability tracking
+                    from datetime import datetime
+
+                    coordinator._last_update_time = datetime.now()
                     # Notify listeners of the update
                     coordinator.async_set_updated_data(coordinator.data)
                     break

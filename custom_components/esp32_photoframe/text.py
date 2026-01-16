@@ -42,6 +42,11 @@ class PhotoFrameImageUrlText(CoordinatorEntity, TextEntity):
         self._attr_device_info = coordinator.device_info
 
     @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.available
+
+    @property
     def native_value(self) -> str | None:
         """Return the current image URL."""
         config = self.coordinator.data.get("config", {})
@@ -64,6 +69,11 @@ class PhotoFrameHaUrlText(CoordinatorEntity, TextEntity):
         self._attr_unique_id = f"{entry.entry_id}_ha_url"
         self._attr_name = "Home Assistant URL"
         self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.available
 
     @property
     def native_value(self) -> str | None:

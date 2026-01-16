@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -28,6 +29,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Store last known battery data to preserve when device is asleep
         self._last_battery_data = {}
+
+        # Track last update time for availability
+        self._last_update_time: datetime | None = None
+        self._availability_timeout = timedelta(minutes=2)  # Device offline after 2 min
 
         # Centralized device info for all entities
         self.device_info = {
@@ -56,9 +61,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             # Try to fetch battery data
             battery_data = await self._fetch_battery()
 
-            # If we got battery data, update our cache
+            # If we got battery data, update our cache and timestamp
             if battery_data:
                 self._last_battery_data = battery_data
+                self._last_update_time = datetime.now()
             # Otherwise, use the last known battery data
             else:
                 battery_data = self._last_battery_data
@@ -142,3 +148,12 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to display image: %s", err)
             return False
+
+    @property
+    def available(self) -> bool:
+        """Return if device is available based on last update time."""
+        if self._last_update_time is None:
+            return False
+
+        time_since_update = datetime.now() - self._last_update_time
+        return time_since_update < self._availability_timeout

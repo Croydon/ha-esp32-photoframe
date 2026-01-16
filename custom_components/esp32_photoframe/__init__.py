@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import PhotoFrameCoordinator
-from .image_view import async_setup_image_view
+from .view import async_setup_image_view
 
 _LOGGER = logging.getLogger(__name__)
 

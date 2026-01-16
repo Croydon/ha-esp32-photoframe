@@ -28,6 +28,7 @@ async def async_setup_entry(
 
     entities = [
         PhotoFrameRotateButton(coordinator, entry),
+        PhotoFrameRefreshButton(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -45,6 +46,11 @@ class PhotoFrameRotateButton(CoordinatorEntity, ButtonEntity):
         self._attr_unique_id = f"{entry.entry_id}_rotate"
         self._attr_name = "Rotate image"
         self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.available
 
     async def async_press(self) -> None:
         """Handle the button press."""
@@ -69,3 +75,27 @@ class PhotoFrameRotateButton(CoordinatorEntity, ButtonEntity):
                     )
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to trigger rotation: %s", err)
+
+
+class PhotoFrameRefreshButton(CoordinatorEntity, ButtonEntity):
+    """Refresh button to check device availability."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:refresh-circle"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_refresh"
+        self._attr_name = "Refresh status"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Refresh button is always available."""
+        return True
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        _LOGGER.info("Manual refresh requested - checking device availability")
+        await self.coordinator.async_request_refresh()

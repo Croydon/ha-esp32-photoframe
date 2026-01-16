@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -33,6 +34,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Track last update time for availability
         self._last_update_time: datetime | None = None
         self._availability_timeout = timedelta(minutes=2)  # Device offline after 2 min
+        self._availability_check_interval = timedelta(
+            minutes=1
+        )  # Check every 5 min when offline
+        self._availability_check_task: asyncio.Task | None = None
 
         # Centralized device info for all entities
         self.device_info = {
@@ -48,6 +53,11 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             # No automatic polling - rely on push updates from device
             update_interval=None,
+        )
+
+        # Start availability monitoring task
+        self._availability_check_task = hass.async_create_task(
+            self._availability_check_loop()
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -157,3 +167,28 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         time_since_update = datetime.now() - self._last_update_time
         return time_since_update < self._availability_timeout
+
+    async def _availability_check_loop(self) -> None:
+        """Periodically check device availability when offline."""
+        while True:
+            try:
+                # Wait for the check interval
+                await asyncio.sleep(self._availability_check_interval.total_seconds())
+
+                # Only check if device is currently unavailable
+                if not self.available:
+                    _LOGGER.debug("Device unavailable, checking if it's back online")
+                    try:
+                        # Try to refresh data to check if device is back
+                        await self.async_request_refresh()
+                        if self.available:
+                            _LOGGER.info("Device is back online")
+                    except Exception as err:
+                        _LOGGER.debug("Availability check failed: %s", err)
+            except asyncio.CancelledError:
+                _LOGGER.debug("Availability check task cancelled")
+                break
+            except Exception as err:
+                _LOGGER.error("Error in availability check loop: %s", err)
+                # Continue the loop even if there's an error
+                await asyncio.sleep(60)  # Wait a bit before retrying

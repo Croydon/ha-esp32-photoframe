@@ -56,6 +56,11 @@ class PhotoFrameBatterySensor(CoordinatorEntity, SensorEntity):
         self._attr_device_info = coordinator.device_info
 
     @property
+    def available(self) -> bool:
+        """Battery sensor always available to show last known value."""
+        return True
+
+    @property
     def native_value(self) -> int | None:
         """Return the state of the sensor."""
         battery_data = self.coordinator.data.get("battery", {})
@@ -77,6 +82,11 @@ class PhotoFrameBatteryVoltageSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_battery_voltage"
         self._attr_name = "Battery voltage"
         self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Battery voltage sensor always available to show last known value."""
+        return True
 
     @property
     def native_value(self) -> float | None:
@@ -102,6 +112,11 @@ class PhotoFrameChargingSensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_device_info = coordinator.device_info
 
     @property
+    def available(self) -> bool:
+        """Charging sensor always available to show last known value."""
+        return True
+
+    @property
     def is_on(self) -> bool | None:
         """Return true if battery is charging."""
         battery_data = self.coordinator.data.get("battery", {})
@@ -122,6 +137,11 @@ class PhotoFrameUSBConnectedSensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_device_info = coordinator.device_info
 
     @property
+    def available(self) -> bool:
+        """USB connected sensor always available to show last known value."""
+        return True
+
+    @property
     def is_on(self) -> bool | None:
         """Return true if USB is connected."""
         battery_data = self.coordinator.data.get("battery", {})
@@ -140,6 +160,11 @@ class PhotoFrameBatteryConnectedSensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_battery_connected"
         self._attr_name = "Battery connected"
         self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Battery connected sensor always available to show last known value."""
+        return True
 
     @property
     def is_on(self) -> bool | None:

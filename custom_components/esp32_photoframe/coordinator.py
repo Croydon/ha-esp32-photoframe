@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import API_BATTERY, API_CONFIG, API_DISPLAY_IMAGE, DOMAIN
+from .const import API_BATTERY, API_CONFIG, API_DISPLAY_IMAGE, API_OTA_STATUS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +30,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Store last known battery data to preserve when device is asleep
         self._last_battery_data = {}
+
+        # Store last known OTA data to preserve when device is asleep
+        self._last_ota_data = {}
 
         # Track last update time for availability
         self._last_update_time: datetime | None = None
@@ -79,17 +82,29 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             else:
                 battery_data = self._last_battery_data
 
+            # Try to fetch OTA data
+            ota_data = await self._fetch_ota_status()
+
+            # If we got OTA data, update our cache
+            if ota_data:
+                self._last_ota_data = ota_data
+            # Otherwise, use the last known OTA data
+            else:
+                ota_data = self._last_ota_data
+
             return {
                 "config": config_data,
                 "battery": battery_data,
+                "ota": ota_data,
             }
         except aiohttp.ClientError as err:
             # If we have cached data, use it instead of failing
-            if self._last_battery_data:
+            if self._last_battery_data or self._last_ota_data:
                 _LOGGER.warning("Failed to fetch data, using cached values: %s", err)
                 return {
                     "config": {},
                     "battery": self._last_battery_data,
+                    "ota": self._last_ota_data,
                 }
             raise UpdateFailed(f"Error communicating with API: {err}")
 
@@ -123,6 +138,29 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 return await response.json()
         except aiohttp.ClientError as err:
             _LOGGER.debug("Failed to fetch battery data: %s", err)
+            return {}
+
+    async def _fetch_ota_status(self) -> dict[str, Any]:
+        """Fetch OTA status data from photoframe."""
+        try:
+            async with self.session.get(
+                f"{self.host}{API_OTA_STATUS}",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status != 200:
+                    _LOGGER.debug(
+                        "OTA status endpoint returned HTTP %s", response.status
+                    )
+                    return {}
+                data = await response.json()
+                # Extract the fields we need from the OTA status response
+                return {
+                    "current_version": data.get("current_version", ""),
+                    "latest_version": data.get("latest_version", ""),
+                    "state": data.get("state", "idle"),
+                }
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Failed to fetch OTA status: %s", err)
             return {}
 
     async def async_set_config(self, config: dict[str, Any]) -> bool:

@@ -190,13 +190,63 @@ class PhotoFrameBatteryView(HomeAssistantView):
             return web.Response(status=400, text=f"Error: {err}")
 
 
+class PhotoFrameOTAView(HomeAssistantView):
+    """View to receive OTA data from the photoframe."""
+
+    url = "/api/esp32_photoframe/ota"
+    name = "api:esp32_photoframe:ota"
+    requires_auth = False  # Photoframe doesn't support auth
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the view."""
+        self.hass = hass
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Receive OTA data from photoframe."""
+        try:
+            data = await request.json()
+            current_version = data.get("current_version")
+            latest_version = data.get("latest_version")
+            state = data.get("state")
+
+            _LOGGER.info(
+                "Received OTA push: current=%s, latest=%s, state=%s",
+                current_version,
+                latest_version,
+                state,
+            )
+
+            # Update coordinator data for all photoframe integrations
+            for entry_id, coordinator in self.hass.data.get(DOMAIN, {}).items():
+                if hasattr(coordinator, "data"):
+                    # Update OTA data in coordinator
+                    coordinator.data["ota"] = {
+                        "current_version": current_version,
+                        "latest_version": latest_version,
+                        "state": state,
+                    }
+                    # Update last update time for availability tracking
+                    from datetime import datetime
+
+                    coordinator.last_update_success = datetime.now()
+                    # Notify all listeners (sensors) about the update
+                    coordinator.async_set_updated_data(coordinator.data)
+
+            return web.Response(status=200, text="OK")
+        except Exception as err:
+            _LOGGER.error("Error processing OTA data: %s", err)
+            return web.Response(status=400, text=f"Error: {err}")
+
+
 async def async_setup_image_view(hass: HomeAssistant) -> None:
     """Set up the image serving view."""
     hass.http.register_view(PhotoFrameImageView(hass))
     hass.http.register_view(PhotoFrameBatteryView(hass))
+    hass.http.register_view(PhotoFrameOTAView(hass))
     _LOGGER.info(
         "Registered PhotoFrame image serving endpoint at %s", IMAGE_ENDPOINT_PATH
     )
     _LOGGER.info(
         "Registered PhotoFrame battery endpoint at /api/esp32_photoframe/battery"
     )
+    _LOGGER.info("Registered PhotoFrame OTA endpoint at /api/esp32_photoframe/ota")

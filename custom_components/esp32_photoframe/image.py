@@ -63,7 +63,9 @@ class PhotoFrameImage(CoordinatorEntity, ImageEntity):
                         return self._cached_image
 
                     if response.status == 404:
-                        _LOGGER.debug("No image currently displayed, returning cached image")
+                        _LOGGER.debug(
+                            "No image currently displayed, returning cached image"
+                        )
                         return self._cached_image
 
                     _LOGGER.warning(

@@ -93,7 +93,11 @@ class PhotoFrameImageView(HomeAssistantView):
                 # Build full URL if it's a relative path
                 if entity_picture.startswith("/"):
                     # It's a local URL, fetch from HA
-                    base_url = self.hass.config.api.base_url
+                    base_url = (
+                        self.hass.config.external_url
+                        or self.hass.config.internal_url
+                        or "http://localhost:8123"
+                    )
                     full_url = f"{base_url}{entity_picture}"
                 else:
                     full_url = entity_picture

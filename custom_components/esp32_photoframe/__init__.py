@@ -21,6 +21,7 @@ PLATFORMS: list[Platform] = [
     Platform.SELECT,
     Platform.TEXT,
     Platform.BUTTON,
+    Platform.IMAGE,
 ]
 
 

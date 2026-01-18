@@ -41,6 +41,7 @@ class PhotoFrameImage(CoordinatorEntity, ImageEntity):
         self._attr_unique_id = f"{entry.entry_id}_current_image"
         self._attr_device_info = coordinator.device_info
         self._attr_image_last_updated = datetime.now()
+        self._cached_image: bytes | None = None
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
@@ -48,28 +49,34 @@ class PhotoFrameImage(CoordinatorEntity, ImageEntity):
         super()._handle_coordinator_update()
 
     async def async_image(self) -> bytes | None:
-        """Return image bytes."""
+        """Return image bytes, with caching for offline support."""
         try:
             async with aiohttp.ClientSession() as session:
                 url = f"{self.coordinator.host}/api/current_image"
                 async with session.get(
                     url, timeout=aiohttp.ClientTimeout(total=10)
                 ) as response:
+                    if response.status == 200:
+                        # Cache successful response
+                        self._cached_image = await response.read()
+                        _LOGGER.debug("Image fetched and cached successfully")
+                        return self._cached_image
+
                     if response.status == 404:
-                        _LOGGER.debug("No image currently displayed")
-                        return None
+                        _LOGGER.debug("No image currently displayed, returning cached image")
+                        return self._cached_image
 
-                    if response.status != 200:
-                        _LOGGER.error(
-                            "Failed to get current image: %s", response.status
-                        )
-                        return None
-
-                    return await response.read()
+                    _LOGGER.warning(
+                        "Failed to get current image: %s, returning cached image",
+                        response.status,
+                    )
+                    return self._cached_image
 
         except Exception as err:
-            _LOGGER.error("Error fetching image: %s", err)
-            return None
+            _LOGGER.debug(
+                "Device offline or unreachable (%s), returning cached image", err
+            )
+            return self._cached_image
 
     @property
     def available(self) -> bool:

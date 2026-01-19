@@ -38,6 +38,7 @@ async def async_setup_entry(
         PhotoFrameCurrentVersionSensor(coordinator, entry),
         PhotoFrameLatestVersionSensor(coordinator, entry),
         PhotoFrameOTAStateSensor(coordinator, entry),
+        PhotoFrameOnlineSensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -249,3 +250,49 @@ class PhotoFrameOTAStateSensor(CoordinatorEntity, SensorEntity):
         """Return the OTA state."""
         ota_data = self.coordinator.data.get("ota", {})
         return ota_data.get("state")
+
+
+class PhotoFrameOnlineSensor(CoordinatorEntity, BinarySensorEntity):
+    """Device online status sensor for PhotoFrame."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_online"
+        self._attr_name = "Online"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if device is online.
+
+        Device is considered online if:
+        1. Explicit _device_online flag is True (set by online/offline notifications), AND
+        2. Either last_update_success is True OR last update was within timeout period
+        """
+        from datetime import datetime, timedelta
+
+        # If device explicitly notified offline, it's offline
+        if not self.coordinator._device_online:
+            return False
+
+        # Check if we have recent successful update
+        if self.coordinator.last_update_success:
+            return True
+
+        # Check timeout-based offline detection
+        if self.coordinator._last_update_time:
+            time_since_update = datetime.now() - self.coordinator._last_update_time
+            # Consider online if updated within the last 2 minutes
+            return time_since_update < timedelta(minutes=2)
+
+        # No update time recorded, assume offline
+        return False
+
+    @property
+    def available(self) -> bool:
+        """This sensor is always available to show online/offline state."""
+        return True

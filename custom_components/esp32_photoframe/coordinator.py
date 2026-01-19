@@ -28,18 +28,8 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self.session = async_get_clientsession(hass)
         self.entry = entry
 
-        # Resolve and cache the IP address from hostname (for mDNS support)
-        import socket
-
-        hostname = (
-            self.host.replace("http://", "").replace("https://", "").split(":")[0]
-        )
-        try:
-            self.resolved_ip = socket.gethostbyname(hostname)
-            _LOGGER.info("Resolved %s to IP %s", hostname, self.resolved_ip)
-        except socket.gaierror:
-            self.resolved_ip = hostname  # Use as-is if resolution fails
-            _LOGGER.warning("Failed to resolve %s, using as-is", hostname)
+        # Will be resolved async in first refresh
+        self.resolved_ip: str | None = None
 
         # Store last known battery data to preserve when device is asleep
         self._last_battery_data = {}
@@ -50,12 +40,15 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Store cached image uploaded by device (for deep sleep support)
         self._cached_image: bytes | None = None
 
+        # Track device online/offline state (set by explicit notifications)
+        self._device_online: bool = True
+
         # Track last update time for availability
         self._last_update_time: datetime | None = None
         self._availability_timeout = timedelta(minutes=2)  # Device offline after 2 min
         self._availability_check_interval = timedelta(
             minutes=1
-        )  # Check every 5 min when offline
+        )  # Check periodically when offline
         self._availability_check_task: asyncio.Task | None = None
 
         # Centralized device info for all entities
@@ -70,8 +63,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            # No automatic polling - rely on push updates from device
-            update_interval=None,
+            # Poll every 10 minutes for battery and OTA updates
+            # Device will be marked offline after 2 minutes of no response
+            update_interval=timedelta(minutes=10),
         )
 
         # Start availability monitoring task
@@ -81,50 +75,84 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""
-        # This is only called during initial setup or manual refresh
-        # Normal operation relies on push updates from the device
+        # Called periodically and when device sends notification
+        # Notifications provide immediate updates, polling provides regular battery/OTA checks
         try:
-            # Fetch config data
+            # Resolve hostname to IP if not already done (for mDNS support)
+            if self.resolved_ip is None:
+                import socket
+
+                hostname = (
+                    self.host.replace("http://", "")
+                    .replace("https://", "")
+                    .split(":")[0]
+                )
+                try:
+                    # Use asyncio to avoid blocking
+                    loop = asyncio.get_event_loop()
+                    self.resolved_ip = await loop.run_in_executor(
+                        None, socket.gethostbyname, hostname
+                    )
+                    _LOGGER.info("Resolved %s to IP %s", hostname, self.resolved_ip)
+                except socket.gaierror:
+                    self.resolved_ip = hostname  # Use as-is if resolution fails
+                    _LOGGER.warning("Failed to resolve %s, using as-is", hostname)
+
+            # Try to fetch config data (may fail if device is asleep)
+            _LOGGER.debug("Fetching config data from %s", self.host)
             config_data = await self._fetch_config()
+            _LOGGER.debug("Config data fetched: %s", bool(config_data))
 
             # Try to fetch battery data
+            _LOGGER.debug("Fetching battery data from %s", self.host)
             battery_data = await self._fetch_battery()
 
             # If we got battery data, update our cache and timestamp
             if battery_data:
+                _LOGGER.debug("Battery data fetched successfully: %s%%", battery_data.get("battery_level"))
                 self._last_battery_data = battery_data
                 self._last_update_time = datetime.now()
             # Otherwise, use the last known battery data
             else:
+                _LOGGER.debug("Using cached battery data")
                 battery_data = self._last_battery_data
 
             # Try to fetch OTA data
+            _LOGGER.debug("Fetching OTA status from %s", self.host)
             ota_data = await self._fetch_ota_status()
 
             # If we got OTA data, update our cache
             if ota_data:
+                _LOGGER.debug("OTA data fetched successfully: %s", ota_data.get("current_version"))
                 self._last_ota_data = ota_data
             # Otherwise, use the last known OTA data
             else:
+                _LOGGER.debug("Using cached OTA data")
                 ota_data = self._last_ota_data
 
-            # Always fetch current image to ensure we have the latest
-            await self.fetch_current_image()
+            # Try to fetch current image (may fail if device is asleep)
+            _LOGGER.debug("Fetching current image from %s", self.host)
+            try:
+                await self.fetch_current_image()
+            except (aiohttp.ClientError, UpdateFailed):
+                # Keep existing cached image if fetch fails
+                _LOGGER.debug("Failed to fetch current image, keeping cached version")
 
             return {
                 "config": config_data,
                 "battery": battery_data,
                 "ota": ota_data,
             }
-        except aiohttp.ClientError as err:
-            # If we have cached data, use it instead of failing
+        except (aiohttp.ClientError, UpdateFailed) as err:
+            # Device is likely offline/asleep - use cached data instead of failing
             if self._last_battery_data or self._last_ota_data:
-                _LOGGER.warning("Failed to fetch data, using cached values: %s", err)
+                _LOGGER.debug("Device offline/asleep, using cached values: %s", err)
                 return {
                     "config": {},
                     "battery": self._last_battery_data,
                     "ota": self._last_ota_data,
                 }
+            # Only fail if we have no cached data at all (first time setup)
             raise UpdateFailed(f"Error communicating with API: {err}")
 
     async def _fetch_config(self) -> dict[str, Any]:
@@ -245,10 +273,21 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
     @property
     def available(self) -> bool:
-        """Return if device is available based on last update time."""
+        """Return if device is available based on explicit online/offline state and timeout.
+
+        Device is considered available if:
+        1. Explicitly marked as online (_device_online = True), AND
+        2. Either has recent successful update OR within timeout period
+        """
+        # If device explicitly notified offline, it's unavailable
+        if not self._device_online:
+            return False
+
+        # If no update time recorded yet, unavailable
         if self._last_update_time is None:
             return False
 
+        # Check if within timeout period
         time_since_update = datetime.now() - self._last_update_time
         return time_since_update < self._availability_timeout
 

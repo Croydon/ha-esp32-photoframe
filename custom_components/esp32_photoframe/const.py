@@ -16,6 +16,7 @@ API_BATTERY = "/api/battery"
 API_DISPLAY_IMAGE = "/api/display-image"
 API_ROTATE = "/api/rotate"
 API_OTA_STATUS = "/api/ota/status"
+API_CURRENT_IMAGE = "/api/current_image"
 
 # Services
 SERVICE_ROTATE = "rotate"

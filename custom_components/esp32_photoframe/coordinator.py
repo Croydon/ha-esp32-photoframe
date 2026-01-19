@@ -28,11 +28,27 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self.session = async_get_clientsession(hass)
         self.entry = entry
 
+        # Resolve and cache the IP address from hostname (for mDNS support)
+        import socket
+
+        hostname = (
+            self.host.replace("http://", "").replace("https://", "").split(":")[0]
+        )
+        try:
+            self.resolved_ip = socket.gethostbyname(hostname)
+            _LOGGER.info("Resolved %s to IP %s", hostname, self.resolved_ip)
+        except socket.gaierror:
+            self.resolved_ip = hostname  # Use as-is if resolution fails
+            _LOGGER.warning("Failed to resolve %s, using as-is", hostname)
+
         # Store last known battery data to preserve when device is asleep
         self._last_battery_data = {}
 
         # Store last known OTA data to preserve when device is asleep
         self._last_ota_data = {}
+
+        # Store cached image uploaded by device (for deep sleep support)
+        self._cached_image: bytes | None = None
 
         # Track last update time for availability
         self._last_update_time: datetime | None = None
@@ -91,6 +107,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             # Otherwise, use the last known OTA data
             else:
                 ota_data = self._last_ota_data
+
+            # Always fetch current image to ensure we have the latest
+            await self.fetch_current_image()
 
             return {
                 "config": config_data,
@@ -163,6 +182,33 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Failed to fetch OTA status: %s", err)
             return {}
 
+    async def fetch_current_image(self) -> None:
+        """Fetch and cache the current image from the device."""
+        try:
+            from .const import API_CURRENT_IMAGE
+
+            async with self.session.get(
+                f"{self.host}{API_CURRENT_IMAGE}",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 200:
+                    self._cached_image = await response.read()
+                    _LOGGER.debug(
+                        "Fetched and cached current image (%d bytes)",
+                        len(self._cached_image),
+                    )
+                elif response.status == 404:
+                    _LOGGER.debug("No image currently displayed on device")
+                    # Don't clear cache - keep showing last known image
+                else:
+                    _LOGGER.debug(
+                        "Failed to fetch current image: HTTP %s", response.status
+                    )
+                    # Don't clear cache - keep showing last known image
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Failed to fetch current image: %s", err)
+            # Don't clear cache - preserve last known image for offline support
+
     async def async_set_config(self, config: dict[str, Any]) -> bool:
         """Set configuration on the photoframe."""
         try:
@@ -228,5 +274,5 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 break
             except Exception as err:
                 _LOGGER.error("Error in availability check loop: %s", err)
-                # Continue the loop even if there's an error
-                await asyncio.sleep(60)  # Wait a bit before retrying
+                # Wait before retrying to avoid tight loop on persistent errors
+                await asyncio.sleep(60)

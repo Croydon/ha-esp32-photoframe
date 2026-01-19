@@ -3,14 +3,44 @@
 from __future__ import annotations
 
 import logging
+import socket
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, IMAGE_ENDPOINT_PATH
+from .coordinator import PhotoFrameCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def find_coordinator_by_device_ip(
+    hass: HomeAssistant, device_ip: str
+) -> PhotoFrameCoordinator | None:
+    """Find coordinator matching the device IP address.
+
+    Uses cached resolved IP from coordinator (resolved at init time).
+
+    Args:
+        hass: Home Assistant instance
+        device_ip: IP address of the device making the request
+
+    Returns:
+        Matching coordinator or None if not found
+    """
+    for entry_id, coord in hass.data.get(DOMAIN, {}).items():
+        # Use the cached resolved IP from coordinator
+        if coord.resolved_ip == device_ip:
+            _LOGGER.debug(
+                "Found matching coordinator for device %s (host: %s)",
+                device_ip,
+                coord.host,
+            )
+            return coord
+
+    _LOGGER.warning("No coordinator found for device IP %s", device_ip)
+    return None
 
 
 class PhotoFrameImageView(HomeAssistantView):
@@ -164,25 +194,28 @@ class PhotoFrameBatteryView(HomeAssistantView):
                 battery_connected,
             )
 
-            # Update coordinator data for all photoframe integrations
-            # Find the coordinator and update its data
-            for entry_id, coordinator in self.hass.data.get(DOMAIN, {}).items():
-                if hasattr(coordinator, "data"):
-                    # Update battery data in coordinator
-                    coordinator.data["battery"] = {
-                        "battery_level": battery_level,
-                        "battery_voltage": battery_voltage,
-                        "charging": charging,
-                        "usb_connected": usb_connected,
-                        "battery_connected": battery_connected,
-                    }
-                    # Update last update time for availability tracking
-                    from datetime import datetime
+            # Get the device IP from the request
+            device_ip = request.remote
 
-                    coordinator._last_update_time = datetime.now()
-                    # Notify listeners of the update
-                    coordinator.async_set_updated_data(coordinator.data)
-                    break
+            # Find the coordinator that matches this device's IP
+            coordinator = find_coordinator_by_device_ip(self.hass, device_ip)
+            if not coordinator:
+                return web.Response(status=404, text="Device not found")
+
+            # Update battery data in coordinator
+            coordinator.data["battery"] = {
+                "battery_level": battery_level,
+                "battery_voltage": battery_voltage,
+                "charging": charging,
+                "usb_connected": usb_connected,
+                "battery_connected": battery_connected,
+            }
+            # Update last update time for availability tracking
+            from datetime import datetime
+
+            coordinator._last_update_time = datetime.now()
+            # Notify listeners of the update
+            coordinator.async_set_updated_data(coordinator.data)
 
             return web.Response(status=200, text="OK")
         except Exception as err:
@@ -216,25 +249,84 @@ class PhotoFrameOTAView(HomeAssistantView):
                 state,
             )
 
-            # Update coordinator data for all photoframe integrations
-            for entry_id, coordinator in self.hass.data.get(DOMAIN, {}).items():
-                if hasattr(coordinator, "data"):
-                    # Update OTA data in coordinator
-                    coordinator.data["ota"] = {
-                        "current_version": current_version,
-                        "latest_version": latest_version,
-                        "state": state,
-                    }
-                    # Update last update time for availability tracking
-                    from datetime import datetime
+            # Get the device IP from the request
+            device_ip = request.remote
 
-                    coordinator.last_update_success = datetime.now()
-                    # Notify all listeners (sensors) about the update
-                    coordinator.async_set_updated_data(coordinator.data)
+            # Find the coordinator that matches this device's IP
+            coordinator = find_coordinator_by_device_ip(self.hass, device_ip)
+            if not coordinator:
+                return web.Response(status=404, text="Device not found")
+
+            # Update OTA data in coordinator
+            coordinator.data["ota"] = {
+                "current_version": current_version,
+                "latest_version": latest_version,
+                "state": state,
+            }
+            # Update last update time for availability tracking
+            from datetime import datetime
+
+            coordinator._last_update_time = datetime.now()
+            # Notify all listeners (sensors) about the update
+            coordinator.async_set_updated_data(coordinator.data)
 
             return web.Response(status=200, text="OK")
         except Exception as err:
             _LOGGER.error("Error processing OTA data: %s", err)
+            return web.Response(status=400, text=f"Error: {err}")
+
+
+class PhotoFrameImageUpdateView(HomeAssistantView):
+    """View to receive image uploads from the photoframe."""
+
+    url = "/api/esp32_photoframe/image_update"
+    name = "api:esp32_photoframe:image_update"
+    requires_auth = False  # Photoframe doesn't support auth
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the view."""
+        self.hass = hass
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Receive image upload from photoframe."""
+        try:
+            # Read image bytes from request body
+            image_data = await request.read()
+            content_type = request.headers.get("Content-Type", "image/jpeg")
+
+            if not image_data:
+                _LOGGER.warning("Received empty image data")
+                return web.Response(status=400, text="Empty image data")
+
+            # Get the device IP from the request
+            device_ip = request.remote
+            _LOGGER.info(
+                "Received image upload from %s: %d bytes, type=%s",
+                device_ip,
+                len(image_data),
+                content_type,
+            )
+
+            # Find the coordinator that matches this device's IP
+            _LOGGER.info("Looking for coordinator matching device IP: %s", device_ip)
+            coordinator = find_coordinator_by_device_ip(self.hass, device_ip)
+            if not coordinator:
+                return web.Response(status=404, text="Device not found")
+
+            # Store image in coordinator cache
+            _LOGGER.info(
+                "Storing uploaded image in coordinator cache (%d bytes)",
+                len(image_data),
+            )
+            coordinator._cached_image = image_data
+
+            # Trigger coordinator refresh to update all entities (including image entity)
+            await coordinator.async_request_refresh()
+            _LOGGER.info("Coordinator refreshed, image entity will be updated")
+
+            return web.Response(status=200, text="OK")
+        except Exception as err:
+            _LOGGER.error("Error processing image upload: %s", err)
             return web.Response(status=400, text=f"Error: {err}")
 
 
@@ -243,6 +335,7 @@ async def async_setup_image_view(hass: HomeAssistant) -> None:
     hass.http.register_view(PhotoFrameImageView(hass))
     hass.http.register_view(PhotoFrameBatteryView(hass))
     hass.http.register_view(PhotoFrameOTAView(hass))
+    hass.http.register_view(PhotoFrameImageUpdateView(hass))
     _LOGGER.info(
         "Registered PhotoFrame image serving endpoint at %s", IMAGE_ENDPOINT_PATH
     )
@@ -250,3 +343,6 @@ async def async_setup_image_view(hass: HomeAssistant) -> None:
         "Registered PhotoFrame battery endpoint at /api/esp32_photoframe/battery"
     )
     _LOGGER.info("Registered PhotoFrame OTA endpoint at /api/esp32_photoframe/ota")
+    _LOGGER.info(
+        "Registered PhotoFrame image update endpoint at /api/esp32_photoframe/image_update"
+    )

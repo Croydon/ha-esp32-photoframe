@@ -33,10 +33,10 @@ class PhotoFrameRotationIntervalNumber(CoordinatorEntity, NumberEntity):
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:timer-outline"
-    _attr_native_min_value = 60
-    _attr_native_max_value = 86400
-    _attr_native_step = 60
-    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_native_min_value = 1
+    _attr_native_max_value = 1440
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_mode = NumberMode.BOX
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
@@ -53,10 +53,12 @@ class PhotoFrameRotationIntervalNumber(CoordinatorEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        """Return the current rotation interval."""
+        """Return the current rotation interval in minutes."""
         config = self.coordinator.data.get("config", {})
-        return config.get("rotate_interval", 3600)
+        seconds = config.get("rotate_interval", 3600)
+        return seconds / 60
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set the rotation interval."""
-        await self.coordinator.async_set_config({"rotate_interval": int(value)})
+        """Set the rotation interval (convert minutes to seconds)."""
+        seconds = int(value * 60)
+        await self.coordinator.async_set_config({"rotate_interval": seconds})

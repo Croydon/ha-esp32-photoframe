@@ -33,6 +33,7 @@ async def async_setup_entry(
         PhotoFrameAutoRotateSwitch(coordinator, entry),
         PhotoFrameDeepSleepSwitch(coordinator, entry),
         PhotoFrameUseHAImagesSwitch(coordinator, entry, hass),
+        PhotoFrameSleepScheduleSwitch(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -180,3 +181,36 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
         self.async_write_ha_state()
 
         _LOGGER.info("Disabled HA image serving - photoframe will use configured URL")
+
+
+class PhotoFrameSleepScheduleSwitch(CoordinatorEntity, SwitchEntity):
+    """Sleep schedule switch for PhotoFrame."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:sleep"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_sleep_schedule"
+        self._attr_name = "Sleep schedule"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.available
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if sleep schedule is enabled."""
+        config = self.coordinator.data.get("config", {})
+        return config.get("sleep_schedule_enabled", False)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable sleep schedule."""
+        await self.coordinator.async_set_config({"sleep_schedule_enabled": True})
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable sleep schedule."""
+        await self.coordinator.async_set_config({"sleep_schedule_enabled": False})

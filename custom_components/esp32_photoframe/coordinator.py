@@ -109,7 +109,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
             # If we got battery data, update our cache and timestamp
             if battery_data:
-                _LOGGER.debug("Battery data fetched successfully: %s%%", battery_data.get("battery_level"))
+                _LOGGER.debug(
+                    "Battery data fetched successfully: %s%%",
+                    battery_data.get("battery_level"),
+                )
                 self._last_battery_data = battery_data
                 self._last_update_time = datetime.now()
             # Otherwise, use the last known battery data
@@ -123,7 +126,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
             # If we got OTA data, update our cache
             if ota_data:
-                _LOGGER.debug("OTA data fetched successfully: %s", ota_data.get("current_version"))
+                _LOGGER.debug(
+                    "OTA data fetched successfully: %s", ota_data.get("current_version")
+                )
                 self._last_ota_data = ota_data
             # Otherwise, use the last known OTA data
             else:

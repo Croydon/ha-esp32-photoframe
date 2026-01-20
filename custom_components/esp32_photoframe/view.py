@@ -197,7 +197,9 @@ class PhotoFrameNotifyView(HomeAssistantView):
                 coordinator.async_set_updated_data(coordinator.data)
             elif state == "update":
                 # Device has new data - trigger coordinator refresh to fetch updated data
-                _LOGGER.info("Device %s has updates, triggering coordinator refresh", device_ip)
+                _LOGGER.info(
+                    "Device %s has updates, triggering coordinator refresh", device_ip
+                )
                 coordinator._device_online = True
                 # Schedule refresh in background to avoid blocking HTTP response
                 self.hass.async_create_task(coordinator.async_request_refresh())

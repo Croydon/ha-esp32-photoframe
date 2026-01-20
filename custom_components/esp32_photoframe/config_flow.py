@@ -94,6 +94,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._device_info: dict[str, Any] | None = None
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -112,22 +116,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                await self.async_set_unique_id(user_input[CONF_HOST])
-                self._abort_if_unique_id_configured()
+                # Store device info and show confirmation step
+                self._device_info = info
+                return await self.async_step_confirm()
 
-                return self.async_create_entry(
-                    title=info["title"],
-                    data={
-                        CONF_HOST: info["host"],
-                        CONF_HA_URL: info["ha_url"],
-                        "device_name": info.get("device_name"),
-                    },
-                )
-
-        # Prefill host with photoframe.local
-        suggested_values = {
-            CONF_HOST: "photoframe.local",
-        }
+        # Prefill host with photoframe.local or preserve user input
+        if user_input is not None:
+            # Preserve user input when showing errors
+            suggested_values = user_input
+        else:
+            # Initial form, suggest photoframe.local
+            suggested_values = {
+                CONF_HOST: "photoframe.local",
+            }
 
         return self.async_show_form(
             step_id="user",
@@ -135,6 +136,35 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 STEP_USER_DATA_SCHEMA, suggested_values
             ),
             errors=errors,
+        )
+
+    async def async_step_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle the confirmation step."""
+        if user_input is not None:
+            # User confirmed, create the entry
+            info = self._device_info
+            await self.async_set_unique_id(info["host"])
+            self._abort_if_unique_id_configured()
+
+            return self.async_create_entry(
+                title=info["title"],
+                data={
+                    CONF_HOST: info["host"],
+                    CONF_HA_URL: info["ha_url"],
+                    "device_name": info.get("device_name"),
+                },
+            )
+
+        # Show confirmation with device name
+        device_name = self._device_info.get("device_name", "Unknown")
+        return self.async_show_form(
+            step_id="confirm",
+            data_schema=vol.Schema(
+                {}
+            ),  # Empty schema - no input fields, just submit button
+            description_placeholders={"device_name": device_name},
         )
 
     @staticmethod

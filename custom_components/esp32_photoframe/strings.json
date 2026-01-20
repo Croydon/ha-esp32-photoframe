@@ -12,6 +12,10 @@
           "host": "The IP address or hostname of your PhotoFrame device",
           "ha_url": "The URL where Home Assistant can be accessed (used by PhotoFrame to fetch images)"
         }
+      },
+      "confirm": {
+        "title": "Confirm PhotoFrame Setup",
+        "description": "Device name: **{device_name}**\n\nClick Submit to add this PhotoFrame to Home Assistant."
       }
     },
     "error": {

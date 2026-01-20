@@ -60,9 +60,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self._availability_check_task: asyncio.Task | None = None
 
         # Centralized device info for all entities
+        device_name = entry.data.get("device_name", "ESP32-S3-PhotoPainter")
         self.device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "ESP32-S3-PhotoPainter",
+            "name": device_name,
             "manufacturer": "Waveshare",
             "model": "ESP32-S3-PhotoPainter",
         }

@@ -34,9 +34,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self.host = entry.data[CONF_HOST]
         self.session = async_get_clientsession(hass)
         self.entry = entry
-
-        # Will be resolved async in first refresh
-        self.resolved_ip: str | None = None
+        self.hass = hass
 
         # Store last known battery data to preserve when device is asleep
         self._last_battery_data = {}
@@ -88,26 +86,6 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Called periodically and when device sends notification
         # Notifications provide immediate updates, polling provides regular battery/OTA checks
         try:
-            # Resolve hostname to IP if not already done (for mDNS support)
-            if self.resolved_ip is None:
-                import socket
-
-                hostname = (
-                    self.host.replace("http://", "")
-                    .replace("https://", "")
-                    .split(":")[0]
-                )
-                try:
-                    # Use asyncio to avoid blocking
-                    loop = asyncio.get_event_loop()
-                    self.resolved_ip = await loop.run_in_executor(
-                        None, socket.gethostbyname, hostname
-                    )
-                    _LOGGER.info("Resolved %s to IP %s", hostname, self.resolved_ip)
-                except socket.gaierror:
-                    self.resolved_ip = hostname  # Use as-is if resolution fails
-                    _LOGGER.warning("Failed to resolve %s, using as-is", hostname)
-
             # Try to fetch config data (may fail if device is asleep)
             _LOGGER.debug("Fetching config data from %s", self.host)
             config_data = await self._fetch_config()
@@ -178,7 +156,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             }
         except (aiohttp.ClientError, UpdateFailed) as err:
             # Device is likely offline/asleep - use cached data instead of failing
-            if self._last_battery_data or self._last_ota_data:
+            if self._last_battery_data or self._last_ota_data or self._last_sensor_data:
                 _LOGGER.debug("Device offline/asleep, using cached values: %s", err)
                 return {
                     "config": {},
@@ -186,8 +164,18 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     "ota": self._last_ota_data,
                     "sensor": self._last_sensor_data,
                 }
-            # Only fail if we have no cached data at all (first time setup)
-            raise UpdateFailed(f"Error communicating with API: {err}")
+            # Device is offline during setup (e.g., HA restart while device asleep)
+            # Return empty data to allow integration to load - it will update when device wakes
+            _LOGGER.warning(
+                "Device offline during setup (likely in deep sleep), integration will update when device wakes: %s",
+                err,
+            )
+            return {
+                "config": {},
+                "battery": {},
+                "ota": {},
+                "sensor": {},
+            }
 
     async def _fetch_config(self) -> dict[str, Any]:
         """Fetch config from photoframe."""

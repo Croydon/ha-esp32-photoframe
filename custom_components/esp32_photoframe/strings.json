@@ -16,6 +16,7 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to PhotoFrame. Please check the IP address/hostname and ensure the device is powered on.\n\n💡 If battery-powered: Press the BOOT button to wake up the device.",
+      "duplicate_device_name": "A PhotoFrame with this device name is already configured. Please change the device name on the PhotoFrame (via web interface or config) and try again.",
       "unknown": "Unexpected error occurred"
     },
     "abort": {

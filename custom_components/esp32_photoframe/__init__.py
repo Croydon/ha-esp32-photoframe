@@ -67,4 +67,4 @@ async def async_setup_services(
     """Set up services for the integration."""
     from .services import async_register_services
 
-    async_register_services(hass, coordinator)
+    await async_register_services(hass, coordinator)

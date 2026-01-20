@@ -15,31 +15,30 @@ from .coordinator import PhotoFrameCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
-def find_coordinator_by_device_ip(
-    hass: HomeAssistant, device_ip: str
+def find_coordinator_by_device_name(
+    hass: HomeAssistant, device_name: str
 ) -> PhotoFrameCoordinator | None:
-    """Find coordinator matching the device IP address.
-
-    Uses cached resolved IP from coordinator (resolved at init time).
+    """Find coordinator matching the device name.
 
     Args:
         hass: Home Assistant instance
-        device_ip: IP address of the device making the request
+        device_name: Name of the device from config
 
     Returns:
         Matching coordinator or None if not found
     """
     for entry_id, coord in hass.data.get(DOMAIN, {}).items():
-        # Use the cached resolved IP from coordinator
-        if coord.resolved_ip == device_ip:
+        # Get device name from config entry
+        coord_device_name = coord.entry.data.get("device_name")
+        if coord_device_name == device_name:
             _LOGGER.debug(
-                "Found matching coordinator for device %s (host: %s)",
-                device_ip,
+                "Found matching coordinator for device '%s' (host: %s)",
+                device_name,
                 coord.host,
             )
             return coord
 
-    _LOGGER.warning("No coordinator found for device IP %s", device_ip)
+    _LOGGER.warning("No coordinator found for device name '%s'", device_name)
     return None
 
 
@@ -178,27 +177,38 @@ class PhotoFrameNotifyView(HomeAssistantView):
     async def post(self, request: web.Request) -> web.Response:
         """Receive notification from photoframe and trigger coordinator refresh."""
         try:
-            # Get the device IP from the request
-            device_ip = request.remote
+            # Parse JSON body
+            try:
+                data = await request.json()
+                device_name = data.get("device_name")
+                state = data.get("state", "online")
+            except Exception as err:
+                _LOGGER.error("Failed to parse JSON notification: %s", err)
+                return web.Response(status=400, text="Invalid JSON payload")
 
-            # Check if this is an offline notification
-            state = request.query.get("state", "online")
-            _LOGGER.info("Received %s notification from %s", state, device_ip)
+            if not device_name:
+                _LOGGER.error("Missing device_name in notification")
+                return web.Response(status=400, text="Missing device_name")
 
-            # Find the coordinator that matches this device's IP
-            coordinator = find_coordinator_by_device_ip(self.hass, device_ip)
+            _LOGGER.info(
+                "Received %s notification from device '%s'", state, device_name
+            )
+
+            # Find the coordinator that matches this device name
+            coordinator = find_coordinator_by_device_name(self.hass, device_name)
             if not coordinator:
                 return web.Response(status=404, text="Device not found")
 
             if state == "offline":
                 # Mark device as offline
-                _LOGGER.info("Device %s going offline (deep sleep)", device_ip)
+                _LOGGER.info("Device %s going offline (deep sleep)", device_name)
                 coordinator._device_online = False
                 coordinator.async_set_updated_data(coordinator.data)
             elif state == "update":
                 # Device has new data - trigger coordinator refresh to fetch updated data
                 _LOGGER.info(
-                    "Device %s has updates, triggering coordinator refresh", device_ip
+                    "Device %s has updates, triggering coordinator refresh",
+                    device_name,
                 )
                 coordinator._device_online = True
                 # Schedule refresh in background to avoid blocking HTTP response
@@ -207,7 +217,7 @@ class PhotoFrameNotifyView(HomeAssistantView):
             else:
                 # Device is online - just mark as available without refreshing
                 # Data will be fetched via periodic polling or update notification
-                _LOGGER.info("Device %s is online", device_ip)
+                _LOGGER.info("Device %s is online", device_name)
                 coordinator._device_online = True
                 coordinator.async_set_updated_data(coordinator.data)
 

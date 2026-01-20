@@ -38,19 +38,31 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     if not host.startswith(("http://", "https://")):
         host = f"http://{host}"
 
-    # Test connection to photoframe
+    # Test connection to photoframe and fetch device name
     session = async_get_clientsession(hass)
+    device_name = None
     try:
         async with session.get(
             f"{host}/api/config", timeout=aiohttp.ClientTimeout(total=10)
         ) as response:
             if response.status != 200:
                 raise CannotConnect(f"HTTP {response.status}")
-            await response.json()
+            config_data = await response.json()
+            device_name = config_data.get("device_name", "ESP32-PhotoFrame")
     except aiohttp.ClientError as err:
         raise CannotConnect(f"Connection failed: {err}")
     except Exception as err:
         raise CannotConnect(f"Unexpected error: {err}")
+
+    # Check if another device with the same name already exists
+    if device_name:
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            existing_device_name = entry.data.get("device_name")
+            if existing_device_name == device_name:
+                raise DuplicateDeviceName(
+                    f"A device with name '{device_name}' is already configured. "
+                    "Please change the device name on the PhotoFrame and try again."
+                )
 
     # Configure the photoframe with HA URL
     try:
@@ -68,9 +80,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     # Return info that you want to store in the config entry.
     return {
-        "title": f"PhotoFrame ({host})",
+        "title": (
+            f"PhotoFrame ({device_name})" if device_name else f"PhotoFrame ({host})"
+        ),
         "host": host,
         "ha_url": ha_url,
+        "device_name": device_name,
     }
 
 
@@ -90,6 +105,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 info = await validate_input(self.hass, user_input)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
+            except DuplicateDeviceName as err:
+                errors["base"] = "duplicate_device_name"
+                _LOGGER.warning("Duplicate device name detected: %s", err)
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -102,6 +120,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data={
                         CONF_HOST: info["host"],
                         CONF_HA_URL: info["ha_url"],
+                        "device_name": info.get("device_name"),
                     },
                 )
 
@@ -209,3 +228,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
 class CannotConnect(Exception):
     """Error to indicate we cannot connect."""
+
+
+class DuplicateDeviceName(Exception):
+    """Error to indicate device name is already in use."""

@@ -318,9 +318,8 @@ class PhotoFrameTemperatureSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if sensor is available."""
-        sensor_data = self.coordinator.data.get("sensor", {})
-        return sensor_data.get("available", False) and self.coordinator.available
+        """Temperature sensor always available to show last known value."""
+        return True
 
     @property
     def native_value(self) -> float | None:
@@ -347,9 +346,8 @@ class PhotoFrameHumiditySensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if sensor is available."""
-        sensor_data = self.coordinator.data.get("sensor", {})
-        return sensor_data.get("available", False) and self.coordinator.available
+        """Humidity sensor always available to show last known value."""
+        return True
 
     @property
     def native_value(self) -> float | None:

@@ -299,9 +299,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             # Don't clear cache - preserve last known image for offline support
 
     async def async_set_config(self, config: dict[str, Any]) -> bool:
-        """Set configuration on the photoframe."""
+        """Set configuration on the photoframe (partial update using PATCH)."""
         try:
-            async with self.session.post(
+            async with self.session.patch(
                 f"{self.host}{API_CONFIG}",
                 json=config,
                 timeout=aiohttp.ClientTimeout(total=10),

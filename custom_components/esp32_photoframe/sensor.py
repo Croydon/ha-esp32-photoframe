@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfElectricPotential
+from homeassistant.const import PERCENTAGE, UnitOfElectricPotential, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -39,6 +39,8 @@ async def async_setup_entry(
         PhotoFrameLatestVersionSensor(coordinator, entry),
         PhotoFrameOTAStateSensor(coordinator, entry),
         PhotoFrameOnlineSensor(coordinator, entry),
+        PhotoFrameTemperatureSensor(coordinator, entry),
+        PhotoFrameHumiditySensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -296,3 +298,61 @@ class PhotoFrameOnlineSensor(CoordinatorEntity, BinarySensorEntity):
     def available(self) -> bool:
         """This sensor is always available to show online/offline state."""
         return True
+
+
+class PhotoFrameTemperatureSensor(CoordinatorEntity, SensorEntity):
+    """Temperature sensor for PhotoFrame."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_has_entity_name = True
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_temperature"
+        self._attr_name = "Temperature"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Return if sensor is available."""
+        sensor_data = self.coordinator.data.get("sensor", {})
+        return sensor_data.get("available", False) and self.coordinator.available
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the temperature value."""
+        sensor_data = self.coordinator.data.get("sensor", {})
+        return sensor_data.get("temperature")
+
+
+class PhotoFrameHumiditySensor(CoordinatorEntity, SensorEntity):
+    """Humidity sensor for PhotoFrame."""
+
+    _attr_device_class = SensorDeviceClass.HUMIDITY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_has_entity_name = True
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_humidity"
+        self._attr_name = "Humidity"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Return if sensor is available."""
+        sensor_data = self.coordinator.data.get("sensor", {})
+        return sensor_data.get("available", False) and self.coordinator.available
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the humidity value."""
+        sensor_data = self.coordinator.data.get("sensor", {})
+        return sensor_data.get("humidity")

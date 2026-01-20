@@ -13,6 +13,7 @@ DEFAULT_PORT = 80
 # API endpoints
 API_CONFIG = "/api/config"
 API_BATTERY = "/api/battery"
+API_SENSOR = "/api/sensor"
 API_DISPLAY_IMAGE = "/api/display-image"
 API_ROTATE = "/api/rotate"
 API_OTA_STATUS = "/api/ota/status"

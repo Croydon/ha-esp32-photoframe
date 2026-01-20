@@ -14,7 +14,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import API_BATTERY, API_CONFIG, API_DISPLAY_IMAGE, API_OTA_STATUS, DOMAIN
+from .const import (
+    API_BATTERY,
+    API_CONFIG,
+    API_DISPLAY_IMAGE,
+    API_OTA_STATUS,
+    API_SENSOR,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +43,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Store last known OTA data to preserve when device is asleep
         self._last_ota_data = {}
+
+        # Store last known sensor data to preserve when device is asleep
+        self._last_sensor_data = {}
 
         # Store cached image uploaded by device (for deep sleep support)
         self._cached_image: bytes | None = None
@@ -135,6 +145,23 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Using cached OTA data")
                 ota_data = self._last_ota_data
 
+            # Try to fetch sensor data
+            _LOGGER.debug("Fetching sensor data from %s", self.host)
+            sensor_data = await self._fetch_sensor()
+
+            # If we got sensor data, update our cache
+            if sensor_data:
+                _LOGGER.debug(
+                    "Sensor data fetched successfully: %.1f°C, %.1f%%",
+                    sensor_data.get("temperature", 0),
+                    sensor_data.get("humidity", 0),
+                )
+                self._last_sensor_data = sensor_data
+            # Otherwise, use the last known sensor data
+            else:
+                _LOGGER.debug("Using cached sensor data")
+                sensor_data = self._last_sensor_data
+
             # Try to fetch current image (may fail if device is asleep)
             _LOGGER.debug("Fetching current image from %s", self.host)
             try:
@@ -147,6 +174,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 "config": config_data,
                 "battery": battery_data,
                 "ota": ota_data,
+                "sensor": sensor_data,
             }
         except (aiohttp.ClientError, UpdateFailed) as err:
             # Device is likely offline/asleep - use cached data instead of failing
@@ -156,6 +184,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     "config": {},
                     "battery": self._last_battery_data,
                     "ota": self._last_ota_data,
+                    "sensor": self._last_sensor_data,
                 }
             # Only fail if we have no cached data at all (first time setup)
             raise UpdateFailed(f"Error communicating with API: {err}")
@@ -213,6 +242,33 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 }
         except aiohttp.ClientError as err:
             _LOGGER.debug("Failed to fetch OTA status: %s", err)
+            return {}
+
+    async def _fetch_sensor(self) -> dict[str, Any]:
+        """Fetch sensor data (temperature/humidity) from photoframe."""
+        try:
+            async with self.session.get(
+                f"{self.host}{API_SENSOR}",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status != 200:
+                    _LOGGER.debug("Sensor endpoint returned HTTP %s", response.status)
+                    return {}
+                data = await response.json()
+                # Only return data if sensor is available and read was successful
+                if data.get("status") == "ok":
+                    return {
+                        "temperature": data.get("temperature"),
+                        "humidity": data.get("humidity"),
+                        "available": True,
+                    }
+                else:
+                    _LOGGER.debug(
+                        "Sensor not available or read error: %s", data.get("status")
+                    )
+                    return {"available": False}
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Failed to fetch sensor data: %s", err)
             return {}
 
     async def fetch_current_image(self) -> None:

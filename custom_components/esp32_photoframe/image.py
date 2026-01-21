@@ -45,17 +45,21 @@ class PhotoFrameImage(CoordinatorEntity, ImageEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        # Only update if we actually have a new image
-        # This prevents clearing the cache during rotation when the device hasn't finished yet
-        if self.coordinator._cached_image:
-            # Update timestamp to trigger image refresh in HA frontend
+        # Only update timestamp if the image fetch was successful
+        # (fetch_successful means new image was retrieved from device)
+        if self.coordinator._cached_image and self.coordinator._image_fetch_successful:
+            # Image was successfully fetched - update timestamp
             self._attr_image_last_updated = datetime.now()
             # Clear cached image URL to force HA to refetch
             self._cached_image_content = None
-
-        super()._handle_coordinator_update()
-        # Explicitly notify HA to update the entity state
-        self.async_write_ha_state()
+            # Reset the flag so we don't update again until next successful fetch
+            self.coordinator._image_fetch_successful = False
+            # Notify HA to update the entity state only when image actually changed
+            super()._handle_coordinator_update()
+            self.async_write_ha_state()
+        else:
+            # No image update - just call parent without triggering state write
+            super()._handle_coordinator_update()
 
     async def async_image(self) -> bytes | None:
         """Return image bytes, with caching for offline support."""

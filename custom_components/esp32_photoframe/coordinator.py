@@ -48,6 +48,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Store cached image uploaded by device (for deep sleep support)
         self._cached_image: bytes | None = None
 
+        # Track if last image fetch was successful (to prevent timestamp updates on failures)
+        self._image_fetch_successful: bool = False
+
         # Track device online/offline state (set by explicit notifications)
         self._device_online: bool = True
 
@@ -262,6 +265,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
     async def fetch_current_image(self) -> None:
         """Fetch and cache the current image from the device."""
+        # Reset success flag before attempting fetch
+        self._image_fetch_successful = False
+
         try:
             from .const import API_CURRENT_IMAGE
 
@@ -271,6 +277,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             ) as response:
                 if response.status == 200:
                     self._cached_image = await response.read()
+                    self._image_fetch_successful = True  # Mark as successful
                     _LOGGER.debug(
                         "Fetched and cached current image (%d bytes)",
                         len(self._cached_image),

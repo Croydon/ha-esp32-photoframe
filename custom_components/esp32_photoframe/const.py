@@ -14,6 +14,7 @@ DEFAULT_PORT = 80
 API_CONFIG = "/api/config"
 API_BATTERY = "/api/battery"
 API_SENSOR = "/api/sensor"
+API_SYSTEM_INFO = "/api/system-info"
 API_DISPLAY_IMAGE = "/api/display-image"
 API_ROTATE = "/api/rotate"
 API_OTA_STATUS = "/api/ota/status"

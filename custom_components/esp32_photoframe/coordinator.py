@@ -20,6 +20,7 @@ from .const import (
     API_DISPLAY_IMAGE,
     API_OTA_STATUS,
     API_SENSOR,
+    API_SYSTEM_INFO,
     DOMAIN,
 )
 
@@ -61,6 +62,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             minutes=1
         )  # Check periodically when offline
         self._availability_check_task: asyncio.Task | None = None
+
+        # System info
+        self.system_info: dict[str, Any] = {}
 
         # Centralized device info for all entities
         device_name = entry.data.get("device_name", "ESP32-S3-PhotoPainter")
@@ -143,6 +147,13 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             else:
                 _LOGGER.debug("Using cached sensor data")
                 sensor_data = self._last_sensor_data
+
+            # Try to fetch system info if not already fetched
+            if not self.system_info:
+                _LOGGER.debug("Fetching system info from %s", self.host)
+                system_info = await self._fetch_system_info()
+                if system_info:
+                    self.system_info = system_info
 
             # Try to fetch current image (may fail if device is asleep)
             _LOGGER.debug("Fetching current image from %s", self.host)
@@ -263,6 +274,23 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Failed to fetch sensor data: %s", err)
             return {}
 
+    async def _fetch_system_info(self) -> dict[str, Any]:
+        """Fetch system info from photoframe."""
+        try:
+            async with self.session.get(
+                f"{self.host}{API_SYSTEM_INFO}",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status != 200:
+                    _LOGGER.debug(
+                        "System info endpoint returned HTTP %s", response.status
+                    )
+                    return {}
+                return await response.json()
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Failed to fetch system info: %s", err)
+            return {}
+
     async def fetch_current_image(self) -> None:
         """Fetch and cache the current image from the device."""
         # Reset success flag before attempting fetch
@@ -372,3 +400,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 _LOGGER.error("Error in availability check loop: %s", err)
                 # Wait before retrying to avoid tight loop on persistent errors
                 await asyncio.sleep(60)
+
+    @property
+    def has_sdcard(self) -> bool:
+        """Return if device has SD card."""
+        return self.system_info.get(
+            "has_sdcard", True
+        )  # Default to True for backward compatibility

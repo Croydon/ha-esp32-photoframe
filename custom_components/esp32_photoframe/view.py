@@ -15,30 +15,30 @@ from .coordinator import PhotoFrameCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
-def find_coordinator_by_device_name(
-    hass: HomeAssistant, device_name: str
+def find_coordinator_by_device_id(
+    hass: HomeAssistant, device_id: str
 ) -> PhotoFrameCoordinator | None:
-    """Find coordinator matching the device name.
+    """Find coordinator matching the device ID.
 
     Args:
         hass: Home Assistant instance
-        device_name: Name of the device from config
+        device_id: Unique ID of the device (MAC address)
 
     Returns:
         Matching coordinator or None if not found
     """
     for entry_id, coord in hass.data.get(DOMAIN, {}).items():
-        # Get device name from config entry
-        coord_device_name = coord.entry.data.get("device_name")
-        if coord_device_name == device_name:
+        # Get device ID from config entry
+        coord_device_id = coord.entry.data.get("device_id")
+        if coord_device_id == device_id:
             _LOGGER.debug(
-                "Found matching coordinator for device '%s' (host: %s)",
-                device_name,
+                "Found matching coordinator for device ID '%s' (host: %s)",
+                device_id,
                 coord.host,
             )
             return coord
 
-    _LOGGER.warning("No coordinator found for device name '%s'", device_name)
+    _LOGGER.warning("No coordinator found for device ID '%s'", device_id)
     return None
 
 
@@ -180,22 +180,26 @@ class PhotoFrameNotifyView(HomeAssistantView):
             # Parse JSON body
             try:
                 data = await request.json()
-                device_name = data.get("device_name")
+                device_id = data.get("device_id")
+                device_name = data.get("device_name", "Unknown")
                 state = data.get("state", "online")
             except Exception as err:
                 _LOGGER.error("Failed to parse JSON notification: %s", err)
                 return web.Response(status=400, text="Invalid JSON payload")
 
-            if not device_name:
-                _LOGGER.error("Missing device_name in notification")
-                return web.Response(status=400, text="Missing device_name")
+            if not device_id:
+                _LOGGER.error("Missing device_id in notification")
+                return web.Response(status=400, text="Missing device_id")
 
             _LOGGER.info(
-                "Received %s notification from device '%s'", state, device_name
+                "Received %s notification from device '%s' (ID: %s)",
+                state,
+                device_name,
+                device_id,
             )
 
-            # Find the coordinator that matches this device name
-            coordinator = find_coordinator_by_device_name(self.hass, device_name)
+            # Find the coordinator that matches this device ID
+            coordinator = find_coordinator_by_device_id(self.hass, device_id)
             if not coordinator:
                 return web.Response(status=404, text="Device not found")
 

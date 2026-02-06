@@ -68,8 +68,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Centralized device info for all entities
         device_name = entry.data.get("device_name", "ESP32-S3-PhotoPainter")
+        device_id = entry.data.get("device_id")
         self.device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
+            "identifiers": {(DOMAIN, device_id if device_id else entry.entry_id)},
             "name": device_name,
             "manufacturer": "Waveshare",
             "model": "ESP32-S3-PhotoPainter",
@@ -98,6 +99,25 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Fetching config data from %s", self.host)
             config_data = await self._fetch_config()
             _LOGGER.debug("Config data fetched: %s", bool(config_data))
+
+            # Self-healing: Check if device_id matches ConfigEntry
+            # This fixes issues where device_id was missing or incorrect during initial setup
+            if config_data and "device_id" in config_data:
+                remote_device_id = config_data["device_id"]
+                current_device_id = self.entry.data.get("device_id")
+
+                if remote_device_id and remote_device_id != current_device_id:
+                    _LOGGER.info(
+                        "Updating ConfigEntry device_id from '%s' to '%s'",
+                        current_device_id,
+                        remote_device_id,
+                    )
+                    # Update the config entry with the correct device_id
+                    new_data = {**self.entry.data}
+                    new_data["device_id"] = remote_device_id
+                    self.hass.config_entries.async_update_entry(
+                        self.entry, data=new_data
+                    )
 
             # Try to fetch battery data
             _LOGGER.debug("Fetching battery data from %s", self.host)

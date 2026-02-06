@@ -49,6 +49,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                 raise CannotConnect(f"HTTP {response.status}")
             config_data = await response.json()
             device_name = config_data.get("device_name", "ESP32-PhotoFrame")
+            device_id = config_data.get("device_id")
     except aiohttp.ClientError as err:
         raise CannotConnect(f"Connection failed: {err}")
     except Exception as err:
@@ -86,6 +87,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         "host": host,
         "ha_url": ha_url,
         "device_name": device_name,
+        "device_id": device_id,
     }
 
 
@@ -154,6 +156,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_HOST: info["host"],
                     CONF_HA_URL: info["ha_url"],
                     "device_name": info.get("device_name"),
+                    "device_id": info.get("device_id"),
                 },
             )
 

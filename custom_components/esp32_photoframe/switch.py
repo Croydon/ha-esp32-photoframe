@@ -55,7 +55,7 @@ class PhotoFrameAutoRotateSwitch(CoordinatorEntity, SwitchEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self.coordinator.available and self.coordinator.has_sdcard
+        return self.coordinator.available
 
     @property
     def is_on(self) -> bool:

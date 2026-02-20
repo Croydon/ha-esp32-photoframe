@@ -14,6 +14,8 @@ from .view import async_setup_image_view
 
 _LOGGER = logging.getLogger(__name__)
 
+DATA_VIEWS_REGISTERED = f"{DOMAIN}_views_registered"
+
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.SWITCH,
@@ -28,19 +30,27 @@ PLATFORMS: list[Platform] = [
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ESP32 PhotoFrame from a config entry."""
+    hass.data.setdefault(DOMAIN, {})
+
+    # Register HTTP views before potentially failing operations so the
+    # notify endpoint is available even when the device is temporarily
+    # unreachable.  Views are registered once per HA session and persist
+    # across integration reloads, so skip if already done.
+    if not hass.data.get(DATA_VIEWS_REGISTERED):
+        await async_setup_image_view(hass)
+        hass.data[DATA_VIEWS_REGISTERED] = True
+
     coordinator = PhotoFrameCoordinator(hass, entry)
 
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Register services and image serving endpoint (only once)
+    # Register services (only once)
     if len(hass.data[DOMAIN]) == 1:
         await async_setup_services(hass, coordinator)
-        await async_setup_image_view(hass)
 
     return True
 

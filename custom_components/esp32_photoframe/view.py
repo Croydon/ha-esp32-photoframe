@@ -38,7 +38,16 @@ def find_coordinator_by_device_id(
             )
             return coord
 
-    _LOGGER.warning("No coordinator found for device ID '%s'", device_id)
+    available_ids = [
+        coord.entry.data.get("device_id")
+        for coord in hass.data.get(DOMAIN, {}).values()
+        if hasattr(coord, "entry")
+    ]
+    _LOGGER.warning(
+        "No coordinator found for device ID '%s' (available: %s)",
+        device_id,
+        available_ids,
+    )
     return None
 
 

@@ -41,7 +41,7 @@ All settings are available as device controls - no need to dig into configuratio
 
 - **Use HA Images** switch - Enable to serve images from Home Assistant
 - **Media Source** select - Choose which camera/image entity to display
-- **Rotation Mode** select - Switch between SD card or URL rotation
+- **Rotation Mode** select - Switch between storage or URL rotation
 - **Auto Rotate** switch - Enable/disable automatic rotation
 - **Deep Sleep** switch - Enable/disable deep sleep for battery saving
 - **Rotation Interval** number - Set how often to rotate images
@@ -60,7 +60,7 @@ The integration creates the following entities for easy control:
 - `number.esp32_photoframe_rotation_interval` - Set rotation interval (60-86400 seconds)
 
 #### Selects
-- `select.esp32_photoframe_rotation_mode` - Choose between "sdcard" or "url" rotation
+- `select.esp32_photoframe_rotation_mode` - Choose between "storage" or "url" rotation
 - `select.esp32_photoframe_media_source` - Select which camera/image entity to serve
 
 #### Text Inputs

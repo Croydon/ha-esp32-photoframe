@@ -422,8 +422,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 await asyncio.sleep(60)
 
     @property
-    def has_sdcard(self) -> bool:
-        """Return if device has SD card."""
+    def has_storage(self) -> bool:
+        """Return if device has storage (SD card or internal flash)."""
         return self.system_info.get(
-            "has_sdcard", True
-        )  # Default to True for backward compatibility
+            "sdcard_inserted", True
+        ) or self.system_info.get(
+            "has_flash_storage", False
+        )  # Default sdcard_inserted to True for backward compatibility

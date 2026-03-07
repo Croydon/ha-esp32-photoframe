@@ -45,9 +45,9 @@ class PhotoFrameRotationModeSelect(CoordinatorEntity, SelectEntity):
     @property
     def options(self) -> list[str]:
         """Return available rotation modes."""
-        if not self.coordinator.has_sdcard:
+        if not self.coordinator.has_storage:
             return ["url"]
-        return ["sdcard", "url"]
+        return ["storage", "url"]
 
     @property
     def available(self) -> bool:
@@ -58,7 +58,11 @@ class PhotoFrameRotationModeSelect(CoordinatorEntity, SelectEntity):
     def current_option(self) -> str | None:
         """Return the current rotation mode."""
         config = self.coordinator.data.get("config", {})
-        return config.get("rotation_mode", "sdcard")
+        mode = config.get("rotation_mode", "storage")
+        # Backwards compatibility: old firmware returns "sdcard"
+        if mode == "sdcard":
+            mode = "storage"
+        return mode
 
     async def async_select_option(self, option: str) -> None:
         """Set the rotation mode."""

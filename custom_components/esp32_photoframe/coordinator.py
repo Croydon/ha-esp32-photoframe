@@ -85,9 +85,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(minutes=10),
         )
 
-        # Start availability monitoring task
-        self._availability_check_task = hass.async_create_task(
-            self._availability_check_loop()
+        # Start availability monitoring task (background so it doesn't block HA bootstrap)
+        self._availability_check_task = hass.async_create_background_task(
+            self._availability_check_loop(),
+            name=f"esp32_photoframe_{self.host}_availability_check",
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -424,8 +425,6 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
     @property
     def has_storage(self) -> bool:
         """Return if device has storage (SD card or internal flash)."""
-        return self.system_info.get(
-            "sdcard_inserted", True
-        ) or self.system_info.get(
+        return self.system_info.get("sdcard_inserted", True) or self.system_info.get(
             "has_flash_storage", False
         )  # Default sdcard_inserted to True for backward compatibility
